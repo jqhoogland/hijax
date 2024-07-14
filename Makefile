@@ -13,7 +13,7 @@ init-venv: clean-venv
 	python3 -m venv $(VENV_NAME)
 	$(PIP) install --upgrade pip
 	$(PIP) install wheel
-	$(PIP) install -e .
+	$(PIP) install -r requirements.txt
 
 .PHONY: clean-venv
 clean-venv:
