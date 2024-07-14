@@ -8,6 +8,7 @@ import pathlib
 import time
 from typing import Literal
 
+import einops
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -51,34 +52,46 @@ def main(
 
     print("simulating automaton...")
     start_time = time.perf_counter()
-    history = jax.jit(
-        simulate,
+    histories = jax.jit(
+        jax.vmap(
+            simulate,
+            in_axes=(0,None,None),
+            out_axes=0, # the default
+        ),
         static_argnames=('height',),
     )(
-        rule=rule,
-        init_state=state,
-        height=height,
+        jnp.arange(256),
+        state,
+        height,
     )
     end_time = time.perf_counter()
     print("simulation complete!")
-    print("result shape", history.shape)
+    # print("result shape", history.shape)
     print(f"time taken {end_time - start_time:.4f} seconds")
 
     if animate:
         print("rendering...")
-        for row in history:
-            print(''.join(["█░"[s]*2 for s in row]))
-            if fps is not None:
-                time.sleep(1/fps)
+        for i, history in enumerate(histories):
+            print("rule", i)
+            for row in history:
+                print(''.join(["█░"[s]*2 for s in row]))
+                if fps is not None: time.sleep(1/fps)
+            if fps is not None: time.sleep(1/fps)
 
     if save_image is not None:
         print("rendering to", save_image, "...")
-        history_greyscale = 255 * (1-history)
-        history_upscaled = (history_greyscale
-                            .repeat(upscale, axis=0)
-                            .repeat(upscale, axis=1)
-                            )
-        Image.fromarray(history_upscaled).save(save_image)
+        histories_arranged = einops.rearrange(
+            histories,
+            '(r1 r2) h w -> (r1 h) (r2 w)',
+            r1=16,
+            r2=16,
+        )
+        histories_greyscale = 255 * (1-histories_arranged)
+        histories_upscaled = (histories_greyscale
+            .repeat(upscale, axis=0)
+            .repeat(upscale, axis=1)
+        )
+        Image.fromarray(np.asarray(histories_upscaled)).save(save_image)
 
 
 def simulate(
